@@ -1,16 +1,15 @@
 """
-Dataset Manager - Módulo para gestión de datasets de gestos
-Autor: Sistema de Dataset de Gestos
+Dataset Manager - CORREGIDO para evitar duplicados
+Solo funciones esenciales para guardar CSV limpio
 """
 
 import pandas as pd
 import os
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-import json
 
 class GestureDatasetManager:
-    """Gestor de datasets de gestos con funcionalidades avanzadas"""
+    """Gestor simplificado de datasets EMG - CORREGIDO"""
     
     def __init__(self):
         """Inicializar el gestor de dataset"""
@@ -18,40 +17,25 @@ class GestureDatasetManager:
         self.session_info = {
             'start_time': None,
             'total_samples': 0,
-            'gestures_captured': [],
-            'series_completed': 0,
             'current_session_id': None
         }
-        self.gesture_names = ["REPOSO", "CERRAR_MANO", "PINZA", "SALUDAR", "TOMAR_OBJETO"]
+        self.gesture_names = ["REPOSO", "CERRAR_MANO", "PINZA", "SALUDAR", "TOMAR_OBJ"]
     
     def start_new_session(self, session_config: Dict) -> str:
-        """
-        Iniciar una nueva sesión de captura
-        
-        Args:
-            session_config: Configuración de la sesión
-            
-        Returns:
-            str: ID de la sesión creada
-        """
-        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        """Iniciar una nueva sesión de captura"""
+        session_id = f"emg_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         self.session_info = {
             'session_id': session_id,
             'start_time': datetime.now(),
             'total_samples': 0,
-            'gestures_captured': session_config.get('selected_gestures', []),
-            'series_planned': session_config.get('series_count', 1),
-            'series_completed': 0,
-            'duration_per_gesture': session_config.get('duration_per_gesture', 5),
-            'rest_time': session_config.get('rest_time', 3),
             'current_session_id': session_id
         }
         
-        print(f"🎯 Nueva sesión iniciada: {session_id}")
-        print(f"📋 Gestos a capturar: {', '.join(self.session_info['gestures_captured'])}")
-        print(f"🔄 Series planificadas: {self.session_info['series_planned']}")
+        # Limpiar dataset anterior
+        self.dataset.clear()
         
+        print(f"🎯 Nueva sesión EMG iniciada: {session_id}")
         return session_id
     
     def add_sample(self, 
@@ -60,110 +44,59 @@ class GestureDatasetManager:
                    gesture_name: str,
                    series_number: int = 1,
                    additional_info: Optional[Dict] = None) -> bool:
-        """
-        Agregar una muestra al dataset
-        
-        Args:
-            features: Características extraídas de MediaPipe
-            gesture_id: ID del gesto (0-4)
-            gesture_name: Nombre del gesto
-            series_number: Número de serie actual
-            additional_info: Información adicional opcional
-            
-        Returns:
-            bool: True si se agregó exitosamente
-        """
+        """Agregar una muestra EMG al dataset - ESTRUCTURA LIMPIA"""
         if not features:
-            print("⚠️ No se pueden agregar muestras sin características")
             return False
         
-        # Crear punto de datos
-        data_point = {
-            'timestamp': datetime.now().isoformat(),
-            'session_id': self.session_info.get('current_session_id', 'unknown'),
-            'sample_number': len(self.dataset) + 1,
-            'series_number': series_number,
-            'gesture_id': gesture_id,
-            'gesture_name': gesture_name,
-        }
-        
-        # Agregar características de MediaPipe
-        data_point.update(features)
-        
-        # Agregar información adicional si está disponible
-        if additional_info:
-            data_point.update(additional_info)
-        
-        # Agregar al dataset
-        self.dataset.append(data_point)
-        self.session_info['total_samples'] += 1
-        
-        return True
-    
-    def get_dataset_statistics(self) -> Dict:
-        """
-        Obtener estadísticas del dataset actual
-        
-        Returns:
-            Dict: Estadísticas completas del dataset
-        """
-        if not self.dataset:
-            return {
-                'total_samples': 0,
-                'gestures_distribution': {},
-                'series_distribution': {},
-                'session_info': self.session_info,
-                'quality_metrics': {}
+        try:
+            # Crear punto de datos LIMPIO - una sola estructura
+            data_point = {
+                # Información básica de la muestra
+                'timestamp': datetime.now().isoformat(),
+                'session_id': str(self.session_info.get('current_session_id', 'unknown')),
+                'sample_number': int(len(self.dataset) + 1),
+                'series_number': int(series_number),
+                
+                # Información del gesto
+                'gesture_id': int(gesture_id),
+                'gesture_name': str(gesture_name),
+                
+                # Datos EMG RAW (lo más importante)
+                'emg1_raw': float(features.get('emg1_raw', 0.0)),
+                'emg2_raw': float(features.get('emg2_raw', 0.0)),
+                'emg3_raw': float(features.get('emg3_raw', 0.0)),
+                
+                # Timestamps del ESP32
+                'session_time': int(features.get('session_time', 0)),
+                'esp32_timestamp': int(features.get('esp32_timestamp', 0))
             }
-        
-        df = pd.DataFrame(self.dataset)
-        
-        # Distribución por gestos
-        gesture_counts = df['gesture_name'].value_counts().to_dict()
-        
-        # Distribución por series
-        series_counts = df['series_number'].value_counts().to_dict() if 'series_number' in df.columns else {}
-        
-        # Métricas de calidad (si están disponibles)
-        quality_metrics = {}
-        quality_columns = ['pinch_score', 'open_hand_score', 'closed_fist_score', 'grasping_score']
-        for col in quality_columns:
-            if col in df.columns:
-                quality_metrics[col] = {
-                    'mean': df[col].mean(),
-                    'std': df[col].std(),
-                    'min': df[col].min(),
-                    'max': df[col].max()
-                }
-        
-        # Calcular progreso de la sesión
-        total_planned = len(self.session_info.get('gestures_captured', [])) * self.session_info.get('series_planned', 1)
-        progress_percentage = (len(self.dataset) / (total_planned * 100)) * 100 if total_planned > 0 else 0
-        
-        return {
-            'total_samples': len(self.dataset),
-            'gestures_distribution': gesture_counts,
-            'series_distribution': series_counts,
-            'session_info': self.session_info,
-            'quality_metrics': quality_metrics,
-            'progress_percentage': min(progress_percentage, 100),
-            'samples_per_gesture_target': 100,  # Objetivo recomendado
-            'session_duration': self._calculate_session_duration()
-        }
+            
+            # OPCIONAL: Solo agregar datos adicionales si son necesarios
+            if additional_info and isinstance(additional_info, dict):
+                # Filtrar solo datos útiles, evitar duplicados
+                useful_keys = ['movement_id', 'esp32_timestamp']  # Solo estos si son necesarios
+                for key in useful_keys:
+                    if key in additional_info and key not in data_point:
+                        value = additional_info[key]
+                        if isinstance(value, (int, float)):
+                            data_point[key] = value
+                        else:
+                            data_point[key] = str(value)
+            
+            # Agregar al dataset
+            self.dataset.append(data_point)
+            self.session_info['total_samples'] += 1
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error agregando muestra: {e}")
+            return False
     
     def save_dataset(self, 
                      filename: Optional[str] = None, 
-                     include_metadata: bool = True) -> Tuple[bool, str]:
-        """
-        Guardar el dataset a un archivo CSV
-        
-        Args:
-            filename: Nombre del archivo (opcional)
-            include_metadata: Si incluir archivo de metadatos
-            
-        Returns:
-            Tuple[bool, str]: Éxito y ruta del archivo guardado
-        """
+                     include_metadata: bool = False) -> Tuple[bool, str]:
+        """Guardar el dataset a un archivo CSV - ESTRUCTURA LIMPIA"""
         if not self.dataset:
             return False, "No hay datos para guardar"
         
@@ -171,24 +104,39 @@ class GestureDatasetManager:
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             session_id = self.session_info.get('session_id', 'unknown')
-            filename = f"gesture_dataset_{session_id}_{timestamp}.csv"
+            filename = f"emg_dataset_{session_id}_{timestamp}.csv"
         
         try:
-            # Crear DataFrame y guardar
+            print(f"💾 Guardando {len(self.dataset)} muestras EMG...")
+            
+            # Crear DataFrame con estructura consistente
             df = pd.DataFrame(self.dataset)
-            df.to_csv(filename, index=False)
             
-            # Guardar metadatos si se solicita
-            if include_metadata:
-                metadata_filename = filename.replace('.csv', '_metadata.json')
-                self._save_metadata(metadata_filename)
+            # Definir orden de columnas para CSV limpio
+            column_order = [
+                'timestamp',
+                'session_id', 
+                'sample_number',
+                'series_number',
+                'gesture_id',
+                'gesture_name',
+                'emg1_raw',
+                'emg2_raw', 
+                'emg3_raw',
+                'session_time',
+                'esp32_timestamp'
+            ]
             
-            # Generar reporte de guardado
-            stats = self.get_dataset_statistics()
-            report = self._generate_save_report(filename, stats)
+            # Reordenar columnas (solo las que existen)
+            existing_columns = [col for col in column_order if col in df.columns]
+            df = df[existing_columns]
             
-            print(f"✅ Dataset guardado exitosamente: {filename}")
-            print(report)
+            # Guardar CSV limpio
+            df.to_csv(filename, index=False, encoding='utf-8')
+            
+            print(f"✅ Dataset EMG guardado: {filename}")
+            print(f"📊 Total de muestras: {len(self.dataset)}")
+            print(f"📋 Columnas: {list(df.columns)}")
             
             return True, filename
             
@@ -198,26 +146,19 @@ class GestureDatasetManager:
             return False, error_msg
     
     def load_dataset(self, filename: str) -> Tuple[bool, str]:
-        """
-        Cargar un dataset desde archivo CSV
-        
-        Args:
-            filename: Ruta del archivo CSV
-            
-        Returns:
-            Tuple[bool, str]: Éxito y mensaje de resultado
-        """
+        """Cargar un dataset desde archivo CSV"""
         try:
             if not os.path.exists(filename):
                 return False, f"Archivo no encontrado: {filename}"
             
-            df = pd.read_csv(filename)
+            df = pd.read_csv(filename, encoding='utf-8')
             self.dataset = df.to_dict('records')
             
-            # Intentar cargar metadatos
-            metadata_filename = filename.replace('.csv', '_metadata.json')
-            if os.path.exists(metadata_filename):
-                self._load_metadata(metadata_filename)
+            # Limpiar tipos de datos
+            for sample in self.dataset:
+                for key, value in sample.items():
+                    if pd.isna(value):
+                        sample[key] = None
             
             print(f"✅ Dataset cargado: {len(self.dataset)} muestras")
             return True, f"Dataset cargado exitosamente: {len(self.dataset)} muestras"
@@ -228,75 +169,33 @@ class GestureDatasetManager:
             return False, error_msg
     
     def clear_dataset(self) -> bool:
-        """
-        Limpiar el dataset actual
-        
-        Returns:
-            bool: True si se limpió exitosamente
-        """
+        """Limpiar el dataset actual"""
         self.dataset.clear()
         self.session_info['total_samples'] = 0
         print("🗑️ Dataset limpiado")
         return True
     
-    def get_gesture_recommendations(self) -> Dict:
-        """
-        Obtener recomendaciones para mejorar el dataset
+    def get_dataset_info(self) -> Dict:
+        """Obtener información del dataset actual"""
+        if not self.dataset:
+            return {'total_samples': 0, 'gestures': [], 'series': []}
         
-        Returns:
-            Dict: Recomendaciones específicas
-        """
-        stats = self.get_dataset_statistics()
-        recommendations = {
-            'urgent': [],
-            'suggested': [],
-            'quality_improvements': []
-        }
-        
-        # Verificar balance entre gestos
-        gesture_counts = stats['gestures_distribution']
-        min_samples_per_gesture = 50
-        ideal_samples_per_gesture = 100
-        
-        for gesture in self.gesture_names:
-            count = gesture_counts.get(gesture, 0)
+        try:
+            gestures = list(set(sample.get('gesture_name', 'UNKNOWN') for sample in self.dataset))
+            series = list(set(sample.get('series_number', 1) for sample in self.dataset))
             
-            if count < min_samples_per_gesture:
-                recommendations['urgent'].append(
-                    f"⚠️ {gesture}: Solo {count} muestras (mínimo {min_samples_per_gesture})"
-                )
-            elif count < ideal_samples_per_gesture:
-                recommendations['suggested'].append(
-                    f"📈 {gesture}: {count} muestras (ideal {ideal_samples_per_gesture})"
-                )
-        
-        # Verificar calidad de los gestos
-        quality_metrics = stats['quality_metrics']
-        for metric, values in quality_metrics.items():
-            if values['mean'] < 0.3:
-                recommendations['quality_improvements'].append(
-                    f"🎯 Mejorar calidad de {metric}: promedio {values['mean']:.2f}"
-                )
-        
-        # Recomendaciones generales
-        if stats['total_samples'] < 200:
-            recommendations['suggested'].append(
-                f"📊 Total de muestras: {stats['total_samples']} (recomendado mínimo 200)"
-            )
-        
-        return recommendations
-    
-    def export_for_ml(self, 
-                      output_dir: str = "ml_export",
-                      train_test_split: float = 0.8) -> Tuple[bool, Dict]:
-        """
-        Exportar dataset optimizado para machine learning
-        
-        Args:
-            output_dir: Directorio de salida
-            train_test_split: Proporción para entrenamiento
-            
-        Returns:
-            Tuple[bool, Dict]: Éxito y información de los archivos exportados
-        """
-        if not self.
+            return {
+                'total_samples': len(self.dataset),
+                'gestures': sorted(gestures),
+                'series': sorted(series),
+                'session_id': self.session_info.get('session_id', 'unknown'),
+                'start_time': self.session_info.get('start_time')
+            }
+        except Exception as e:
+            print(f"Error obteniendo info dataset: {e}")
+            return {'total_samples': len(self.dataset), 'gestures': [], 'series': []}
+
+# Función de utilidad
+def create_dataset_manager() -> GestureDatasetManager:
+    """Crear una instancia del gestor de dataset"""
+    return GestureDatasetManager()

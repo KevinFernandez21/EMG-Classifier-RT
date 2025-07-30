@@ -1,1 +1,4 @@
 *.csv
+*env/
+system_data/__pycache__/
+*.pyc
