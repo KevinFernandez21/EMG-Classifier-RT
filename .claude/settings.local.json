@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/C:\\Users\\hombr\\Desktop\\projects\\programacion\\MovementDetection\\ESP32code\\EMG_uMyo_RealTime/**)",
+      "Bash(ipconfig)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
