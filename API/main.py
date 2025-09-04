@@ -269,7 +269,7 @@ def predict_simple():
             'timestamp': datetime.now().isoformat()
         }
         
-        logging.info(f"ESP32 Predicci�n: {result['gesture']} (conf: {result['confidence']:.2f})")
+        logging.info(f"ESP32 Prediccion: {result['gesture']} (conf: {result['confidence']:.2f})")
         
         # Respuesta simplificada para ESP32
         return jsonify({
